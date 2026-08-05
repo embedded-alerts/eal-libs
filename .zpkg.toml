@@ -17,3 +17,6 @@ exclude = [".env", ".env.*", "node_modules/**", "target/**", "dist/**", "*.log"]
 
 [scripts]
 test = "bash scripts/test.sh"
+
+[dependencies]
+"embedded-alerts/eal-interfaces" = "^0.1.0"
