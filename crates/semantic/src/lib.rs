@@ -47,9 +47,7 @@ pub fn canonicalize_url(input: &str) -> Result<NormalizedUrl, SemanticError> {
 
     let authority_end = remainder
         .char_indices()
-        .find_map(|(index, character)| {
-            matches!(character, '/' | '?' | '#').then_some(index)
-        })
+        .find_map(|(index, character)| matches!(character, '/' | '?' | '#').then_some(index))
         .unwrap_or(remainder.len());
     let authority = &remainder[..authority_end];
     let tail = &remainder[authority_end..];
@@ -272,9 +270,7 @@ pub fn lexical_score(
 ) -> LexicalEvaluation {
     let normalized_query = normalize_text(query);
     let normalized_document = normalize_text(document);
-    let query_tokens = normalized_query
-        .split_whitespace()
-        .collect::<BTreeSet<_>>();
+    let query_tokens = normalized_query.split_whitespace().collect::<BTreeSet<_>>();
     let document_tokens = normalized_document
         .split_whitespace()
         .collect::<BTreeSet<_>>();
@@ -410,11 +406,8 @@ impl ScoreWeights {
         if !self.semantic.is_finite() || !self.lexical.is_finite() {
             return Err(SemanticError::new("score weights must be finite"));
         }
-        if !(0.0..=1.0).contains(&self.semantic) || !(0.0..=1.0).contains(&self.lexical)
-        {
-            return Err(SemanticError::new(
-                "score weights must be between 0 and 1",
-            ));
+        if !(0.0..=1.0).contains(&self.semantic) || !(0.0..=1.0).contains(&self.lexical) {
+            return Err(SemanticError::new("score weights must be between 0 and 1"));
         }
         if (self.semantic + self.lexical - 1.0).abs() > 0.000_1 {
             return Err(SemanticError::new(
@@ -602,9 +595,7 @@ impl RetryPolicy {
             ));
         }
         if self.max_attempts == 0 {
-            return Err(SemanticError::new(
-                "retry max attempts must be positive",
-            ));
+            return Err(SemanticError::new("retry max attempts must be positive"));
         }
         if self.jitter_percent > 50 {
             return Err(SemanticError::new(
@@ -652,8 +643,8 @@ pub fn retry_decision(
     let sample = u64::from_be_bytes(digest[..8].try_into().expect("slice length is fixed"));
     let range = jitter_window.saturating_mul(2).saturating_add(1);
     let sampled_offset = i128::from(sample % range) - i128::from(jitter_window);
-    let jittered = (i128::from(delay) + sampled_offset)
-        .clamp(1, i128::from(policy.max_seconds)) as u64;
+    let jittered =
+        (i128::from(delay) + sampled_offset).clamp(1, i128::from(policy.max_seconds)) as u64;
     Ok(RetryDecision::RetryAfter(jittered))
 }
 
@@ -668,79 +659,19 @@ pub fn sha256_hex(input: &[u8]) -> String {
 
 fn sha256(input: &[u8]) -> [u8; 32] {
     const INITIAL_STATE: [u32; 8] = [
-        0x6a09e667,
-        0xbb67ae85,
-        0x3c6ef372,
-        0xa54ff53a,
-        0x510e527f,
-        0x9b05688c,
-        0x1f83d9ab,
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
         0x5be0cd19,
     ];
     const ROUND_CONSTANTS: [u32; 64] = [
-        0x428a2f98,
-        0x71374491,
-        0xb5c0fbcf,
-        0xe9b5dba5,
-        0x3956c25b,
-        0x59f111f1,
-        0x923f82a4,
-        0xab1c5ed5,
-        0xd807aa98,
-        0x12835b01,
-        0x243185be,
-        0x550c7dc3,
-        0x72be5d74,
-        0x80deb1fe,
-        0x9bdc06a7,
-        0xc19bf174,
-        0xe49b69c1,
-        0xefbe4786,
-        0x0fc19dc6,
-        0x240ca1cc,
-        0x2de92c6f,
-        0x4a7484aa,
-        0x5cb0a9dc,
-        0x76f988da,
-        0x983e5152,
-        0xa831c66d,
-        0xb00327c8,
-        0xbf597fc7,
-        0xc6e00bf3,
-        0xd5a79147,
-        0x06ca6351,
-        0x14292967,
-        0x27b70a85,
-        0x2e1b2138,
-        0x4d2c6dfc,
-        0x53380d13,
-        0x650a7354,
-        0x766a0abb,
-        0x81c2c92e,
-        0x92722c85,
-        0xa2bfe8a1,
-        0xa81a664b,
-        0xc24b8b70,
-        0xc76c51a3,
-        0xd192e819,
-        0xd6990624,
-        0xf40e3585,
-        0x106aa070,
-        0x19a4c116,
-        0x1e376c08,
-        0x2748774c,
-        0x34b0bcb5,
-        0x391c0cb3,
-        0x4ed8aa4a,
-        0x5b9cca4f,
-        0x682e6ff3,
-        0x748f82ee,
-        0x78a5636f,
-        0x84c87814,
-        0x8cc70208,
-        0x90befffa,
-        0xa4506ceb,
-        0xbef9a3f7,
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
         0xc67178f2,
     ];
 
@@ -851,10 +782,9 @@ mod tests {
 
     #[test]
     fn canonicalizes_hosts_paths_and_tracking_parameters() {
-        let normalized = canonicalize_url(
-            "HTTPS://Example.COM:443/a/./b/../c/?utm_source=x&z=2&a=1#fragment",
-        )
-        .unwrap();
+        let normalized =
+            canonicalize_url("HTTPS://Example.COM:443/a/./b/../c/?utm_source=x&z=2&a=1#fragment")
+                .unwrap();
         assert_eq!(normalized.canonical, "https://example.com/a/c/?a=1&z=2");
         assert_eq!(normalized.host, "example.com");
         assert_eq!(normalized.port, None);
