@@ -7,4 +7,4 @@ rust-version.workspace = true
 description = "Deterministic natural-language query views for Embedded Alerts"
 
 [dependencies]
-eal-semantic-contracts = { git = "https://github.com/embedded-alerts/eal-interfaces", rev = "a844e7afdfcc6174fb44fd1981af72439dbee6ff", package = "eal-semantic-contracts" }
+eal-semantic-contracts = { git = "https://github.com/embedded-alerts/eal-interfaces", rev = "62cdad410ace1a8b0b1fb15648ad4731e9786de4", package = "eal-semantic-contracts" }
