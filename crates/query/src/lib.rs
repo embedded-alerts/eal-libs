@@ -76,7 +76,10 @@ pub fn analyze_query(query: &str) -> Result<QueryTextViews, QueryAnalysisError> 
     }
     for (ordinal, input) in embedding_inputs.iter_mut().enumerate() {
         input.ordinal = u16::try_from(ordinal).map_err(|_| {
-            QueryAnalysisError::new("query_too_complex", "query produced too many embedding views")
+            QueryAnalysisError::new(
+                "query_too_complex",
+                "query produced too many embedding views",
+            )
         })?;
     }
 
