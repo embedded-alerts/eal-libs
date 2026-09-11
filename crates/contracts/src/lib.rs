@@ -16,22 +16,29 @@ pub struct EventEnvelope {
 
 impl EventEnvelope {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.id.trim().is_empty() { return Err("event id is required"); }
-        if !valid_kind(&self.kind) { return Err("event kind must be lowercase and namespaced"); }
-        if self.occurred_at.trim().is_empty() { return Err("occurred_at is required"); }
+        if self.id.trim().is_empty() {
+            return Err("event id is required");
+        }
+        if !valid_kind(&self.kind) {
+            return Err("event kind must be lowercase and namespaced");
+        }
+        if self.occurred_at.trim().is_empty() {
+            return Err("occurred_at is required");
+        }
         Ok(())
     }
 }
 
 pub fn valid_kind(value: &str) -> bool {
-    let mut saw_dot = false;
-    if value.is_empty() { return false; }
-    for (index, ch) in value.chars().enumerate() {
-        if ch == '.' { saw_dot = true; continue; }
-        if !(ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-') { return false; }
-        if index == 0 && !ch.is_ascii_lowercase() { return false; }
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_lowercase() {
+        return false;
     }
-    saw_dot
+    chars.all(|ch| ch == '.' || ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
+        && value.contains('.')
 }
 
 pub const PRODUCT: &str = "embedded-alerts";
@@ -44,5 +51,13 @@ mod tests {
         assert!(valid_kind("case.created"));
         assert!(!valid_kind("CaseCreated"));
         assert!(!valid_kind("created"));
+    }
+
+    #[test]
+    fn rejects_empty_disallowed_and_non_alphabetic_starts() {
+        assert!(!valid_kind(""));
+        assert!(!valid_kind("case.cre ated"));
+        assert!(!valid_kind("1case.created"));
+        assert!(valid_kind("case_2.created-now"));
     }
 }
