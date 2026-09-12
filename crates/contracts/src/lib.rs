@@ -37,8 +37,9 @@ pub fn valid_kind(value: &str) -> bool {
     if !first.is_ascii_lowercase() {
         return false;
     }
-    chars.all(|ch| ch == '.' || ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
-        && value.contains('.')
+    chars.all(|ch| {
+        ch == '.' || ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-'
+    }) && value.contains('.')
 }
 
 pub const PRODUCT: &str = "embedded-alerts";
