@@ -4,6 +4,7 @@ use std::{
     collections::BTreeSet,
     error::Error,
     fmt::{self, Write},
+    net::Ipv6Addr,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,11 @@ pub struct NormalizedUrl {
 
 pub fn canonicalize_url(input: &str) -> Result<NormalizedUrl, SemanticError> {
     let trimmed = input.trim();
+    if trimmed.chars().any(char::is_control) || trimmed.contains('\\') {
+        return Err(SemanticError::new(
+            "URL must not contain control characters or backslashes",
+        ));
+    }
     let (raw_scheme, remainder) = trimmed
         .split_once("://")
         .ok_or_else(|| SemanticError::new("URL must include an http or https scheme"))?;
@@ -100,6 +106,11 @@ fn parse_authority(authority: &str) -> Result<(String, Option<u16>), SemanticErr
             .find(']')
             .ok_or_else(|| SemanticError::new("bracketed IPv6 host is missing closing bracket"))?;
         let host = &bracketed[..close];
+        if host.parse::<Ipv6Addr>().is_err() {
+            return Err(SemanticError::new(
+                "bracketed URL host must be an IPv6 address",
+            ));
+        }
         let suffix = &bracketed[close + 1..];
         let port = if suffix.is_empty() {
             None
@@ -130,10 +141,11 @@ fn parse_authority(authority: &str) -> Result<(String, Option<u16>), SemanticErr
     if host.is_empty() {
         return Err(SemanticError::new("URL host must not be empty"));
     }
-    if host
-        .chars()
-        .any(|character| character.is_whitespace() || matches!(character, '/' | '?' | '#'))
-    {
+    if host.chars().any(|character| {
+        character.is_control()
+            || character.is_whitespace()
+            || matches!(character, '/' | '?' | '#' | '\\' | '[' | ']' | '%' | '@')
+    }) {
         return Err(SemanticError::new("URL host contains invalid characters"));
     }
 
@@ -796,6 +808,26 @@ mod tests {
     }
 
     #[test]
+    fn rejects_malformed_ipv6_and_authority_delimiters() {
+        for invalid in [
+            "https://[not-an-ipv6]/",
+            "https://[::1]extra/",
+            "https://[::1]:not-a-port/",
+            "https://[fe80::1%25eth0]/",
+            "https://example.com\\\\evil.test/path",
+            "https://exam%70le.com/path",
+            "https://exam\\nple.com/path",
+            "https://example.com/a\\rhost:bad",
+            "https://[::1",
+        ] {
+            assert!(canonicalize_url(invalid).is_err(), "accepted malformed URL");
+        }
+        let ipv6 = canonicalize_url("https://[::1]:443/health").unwrap();
+        assert_eq!(ipv6.canonical, "https://[::1]/health");
+        assert_eq!(ipv6.host, "::1");
+    }
+
+    #[test]
     fn lexical_matching_enforces_required_and_excluded_phrases() {
         let required = vec!["rust service".into()];
         let excluded = vec!["next js".into()];
@@ -929,5 +961,81 @@ mod tests {
             retry_decision(policy, "delivery-key", 4).unwrap(),
             RetryDecision::DeadLetter
         );
+    }
+}
+
+/// Apply a provider-supplied minimum delay to the normal delivery retry policy.
+///
+/// The provider hint is already parsed into seconds by the caller. It can extend a
+/// retry delay, but cannot bypass the local maximum or resurrect a dead letter.
+/// This function is pure and deterministic, including when the hint overflows a
+/// provider's advertised range.
+pub fn retry_decision_with_provider_delay(
+    policy: RetryPolicy,
+    idempotency_key: &str,
+    failed_attempt: u32,
+    provider_minimum_seconds: Option<u64>,
+) -> Result<RetryDecision, SemanticError> {
+    match retry_decision(policy, idempotency_key, failed_attempt)? {
+        RetryDecision::DeadLetter => Ok(RetryDecision::DeadLetter),
+        RetryDecision::RetryAfter(local_seconds) => Ok(RetryDecision::RetryAfter(
+            local_seconds
+                .max(provider_minimum_seconds.unwrap_or(0))
+                .min(policy.max_seconds),
+        )),
+    }
+}
+
+#[cfg(test)]
+mod provider_retry_delay_tests {
+    use super::*;
+
+    const POLICY: RetryPolicy = RetryPolicy {
+        base_seconds: 10,
+        max_seconds: 120,
+        max_attempts: 4,
+        jitter_percent: 0,
+    };
+
+    #[test]
+    fn no_hint_preserves_local_backoff() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, None).unwrap(),
+            RetryDecision::RetryAfter(20)
+        );
+    }
+
+    #[test]
+    fn provider_hint_is_only_a_minimum() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, Some(5)).unwrap(),
+            RetryDecision::RetryAfter(20)
+        );
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, Some(45)).unwrap(),
+            RetryDecision::RetryAfter(45)
+        );
+    }
+
+    #[test]
+    fn provider_hint_is_bounded_by_local_policy() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, Some(u64::MAX)).unwrap(),
+            RetryDecision::RetryAfter(120)
+        );
+    }
+
+    #[test]
+    fn exhausted_attempts_are_never_resurrected() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 4, Some(60)).unwrap(),
+            RetryDecision::DeadLetter
+        );
+    }
+
+    #[test]
+    fn invalid_local_policy_and_attempt_are_rejected() {
+        assert!(retry_decision_with_provider_delay(POLICY, "delivery", 0, Some(10)).is_err());
+        assert!(retry_decision_with_provider_delay(POLICY, "", 1, Some(10)).is_err());
     }
 }
