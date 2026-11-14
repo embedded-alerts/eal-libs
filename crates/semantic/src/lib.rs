@@ -932,7 +932,6 @@ mod tests {
     }
 }
 
-
 /// Apply a provider-supplied minimum delay to the normal delivery retry policy.
 ///
 /// The provider hint is already parsed into seconds by the caller. It can extend a
