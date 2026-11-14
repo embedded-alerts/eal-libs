@@ -931,3 +931,80 @@ mod tests {
         );
     }
 }
+
+
+/// Apply a provider-supplied minimum delay to the normal delivery retry policy.
+///
+/// The provider hint is already parsed into seconds by the caller. It can extend a
+/// retry delay, but cannot bypass the local maximum or resurrect a dead letter.
+/// This function is pure and deterministic, including when the hint overflows a
+/// provider's advertised range.
+pub fn retry_decision_with_provider_delay(
+    policy: RetryPolicy,
+    idempotency_key: &str,
+    failed_attempt: u32,
+    provider_minimum_seconds: Option<u64>,
+) -> Result<RetryDecision, SemanticError> {
+    match retry_decision(policy, idempotency_key, failed_attempt)? {
+        RetryDecision::DeadLetter => Ok(RetryDecision::DeadLetter),
+        RetryDecision::RetryAfter(local_seconds) => Ok(RetryDecision::RetryAfter(
+            local_seconds
+                .max(provider_minimum_seconds.unwrap_or(0))
+                .min(policy.max_seconds),
+        )),
+    }
+}
+
+#[cfg(test)]
+mod provider_retry_delay_tests {
+    use super::*;
+
+    const POLICY: RetryPolicy = RetryPolicy {
+        base_seconds: 10,
+        max_seconds: 120,
+        max_attempts: 4,
+        jitter_percent: 0,
+    };
+
+    #[test]
+    fn no_hint_preserves_local_backoff() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, None).unwrap(),
+            RetryDecision::RetryAfter(20)
+        );
+    }
+
+    #[test]
+    fn provider_hint_is_only_a_minimum() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, Some(5)).unwrap(),
+            RetryDecision::RetryAfter(20)
+        );
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, Some(45)).unwrap(),
+            RetryDecision::RetryAfter(45)
+        );
+    }
+
+    #[test]
+    fn provider_hint_is_bounded_by_local_policy() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 2, Some(u64::MAX)).unwrap(),
+            RetryDecision::RetryAfter(120)
+        );
+    }
+
+    #[test]
+    fn exhausted_attempts_are_never_resurrected() {
+        assert_eq!(
+            retry_decision_with_provider_delay(POLICY, "delivery", 4, Some(60)).unwrap(),
+            RetryDecision::DeadLetter
+        );
+    }
+
+    #[test]
+    fn invalid_local_policy_and_attempt_are_rejected() {
+        assert!(retry_decision_with_provider_delay(POLICY, "delivery", 0, Some(10)).is_err());
+        assert!(retry_decision_with_provider_delay(POLICY, "", 1, Some(10)).is_err());
+    }
+}
