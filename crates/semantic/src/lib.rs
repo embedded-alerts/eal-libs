@@ -107,7 +107,9 @@ fn parse_authority(authority: &str) -> Result<(String, Option<u16>), SemanticErr
             .ok_or_else(|| SemanticError::new("bracketed IPv6 host is missing closing bracket"))?;
         let host = &bracketed[..close];
         if host.parse::<Ipv6Addr>().is_err() {
-            return Err(SemanticError::new("bracketed URL host must be an IPv6 address"));
+            return Err(SemanticError::new(
+                "bracketed URL host must be an IPv6 address",
+            ));
         }
         let suffix = &bracketed[close + 1..];
         let port = if suffix.is_empty() {
@@ -139,10 +141,11 @@ fn parse_authority(authority: &str) -> Result<(String, Option<u16>), SemanticErr
     if host.is_empty() {
         return Err(SemanticError::new("URL host must not be empty"));
     }
-    if host
-        .chars()
-        .any(|character| character.is_control() || character.is_whitespace() || matches!(character, '/' | '?' | '#' | '\\' | '[' | ']' | '%' | '@'))
-    {
+    if host.chars().any(|character| {
+        character.is_control()
+            || character.is_whitespace()
+            || matches!(character, '/' | '?' | '#' | '\\' | '[' | ']' | '%' | '@')
+    }) {
         return Err(SemanticError::new("URL host contains invalid characters"));
     }
 
