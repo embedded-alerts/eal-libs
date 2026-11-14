@@ -4,6 +4,7 @@ use std::{
     collections::BTreeSet,
     error::Error,
     fmt::{self, Write},
+    net::Ipv6Addr,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,11 @@ pub struct NormalizedUrl {
 
 pub fn canonicalize_url(input: &str) -> Result<NormalizedUrl, SemanticError> {
     let trimmed = input.trim();
+    if trimmed.chars().any(char::is_control) || trimmed.contains('\\') {
+        return Err(SemanticError::new(
+            "URL must not contain control characters or backslashes",
+        ));
+    }
     let (raw_scheme, remainder) = trimmed
         .split_once("://")
         .ok_or_else(|| SemanticError::new("URL must include an http or https scheme"))?;
@@ -100,6 +106,9 @@ fn parse_authority(authority: &str) -> Result<(String, Option<u16>), SemanticErr
             .find(']')
             .ok_or_else(|| SemanticError::new("bracketed IPv6 host is missing closing bracket"))?;
         let host = &bracketed[..close];
+        if host.parse::<Ipv6Addr>().is_err() {
+            return Err(SemanticError::new("bracketed URL host must be an IPv6 address"));
+        }
         let suffix = &bracketed[close + 1..];
         let port = if suffix.is_empty() {
             None
@@ -132,7 +141,7 @@ fn parse_authority(authority: &str) -> Result<(String, Option<u16>), SemanticErr
     }
     if host
         .chars()
-        .any(|character| character.is_whitespace() || matches!(character, '/' | '?' | '#'))
+        .any(|character| character.is_control() || character.is_whitespace() || matches!(character, '/' | '?' | '#' | '\\' | '[' | ']' | '%' | '@'))
     {
         return Err(SemanticError::new("URL host contains invalid characters"));
     }
@@ -793,6 +802,26 @@ mod tests {
     #[test]
     fn rejects_user_information() {
         assert!(canonicalize_url("https://user:pass@example.com/").is_err());
+    }
+
+    #[test]
+    fn rejects_malformed_ipv6_and_authority_delimiters() {
+        for invalid in [
+            "https://[not-an-ipv6]/",
+            "https://[::1]extra/",
+            "https://[::1]:not-a-port/",
+            "https://[fe80::1%25eth0]/",
+            "https://example.com\\\\evil.test/path",
+            "https://exam%70le.com/path",
+            "https://exam\\nple.com/path",
+            "https://example.com/a\\rhost:bad",
+            "https://[::1",
+        ] {
+            assert!(canonicalize_url(invalid).is_err(), "accepted malformed URL");
+        }
+        let ipv6 = canonicalize_url("https://[::1]:443/health").unwrap();
+        assert_eq!(ipv6.canonical, "https://[::1]/health");
+        assert_eq!(ipv6.host, "::1");
     }
 
     #[test]
